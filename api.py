@@ -2,14 +2,14 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Form, Query
+from fastapi import FastAPI, HTTPException, Form, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from src.ceres_agente.db import engine, init_db, Lead, Cotizacion, Conversacion
-from src.ceres_agente.services.whatsapp import procesar_mensaje
+from src.ceres_agente.services.whatsapp import procesar_y_enviar
 from src.ceres_agente.services import calcular_score, obtener_tiie, calcular_cuota
 from src.ceres_agente.services.tiie import SPREAD_CERES
 from src.ceres_agente.services.scoring import inicializar_modelo
@@ -257,18 +257,18 @@ def notificar(req: NotificarRequest):
 
 @app.post("/webhook/whatsapp")
 async def webhook_whatsapp(
+    background_tasks: BackgroundTasks,
     From: str = Form(...),
     Body: str = Form(...),
 ):
-    """Webhook de Twilio para WhatsApp. Usa el flujo conversacional paso a paso
-    con el agente multi-agente como respaldo para mensajes fuera de flujo."""
+    """Webhook de Twilio. Retorna TwiML vacío inmediatamente para evitar
+    el timeout de 15s de Twilio y procesa en background via REST API."""
     telefono = From.replace("whatsapp:", "")
-    respuesta = await procesar_mensaje(telefono, Body)
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>{respuesta}</Message>
-</Response>"""
-    return PlainTextResponse(content=twiml, media_type="application/xml")
+    background_tasks.add_task(procesar_y_enviar, telefono, Body)
+    return PlainTextResponse(
+        content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        media_type="application/xml",
+    )
 
 
 # ---------------------------------------------------------------------------
