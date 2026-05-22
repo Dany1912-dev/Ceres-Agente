@@ -1,0 +1,22 @@
+services:
+  ceres-api:
+    build: .
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    volumes:
+      - ceres-db:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/ceres.db
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - ceres-api
+    restart: unless-stopped
+
+volumes:
+  ceres-db:

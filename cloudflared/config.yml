@@ -1,0 +1,7 @@
+tunnel: <ID-DEL-TUNNEL>
+credentials-file: /etc/cloudflared/<ID-DEL-TUNNEL>.json
+
+ingress:
+  - hostname: api.tudominio.com
+    service: http://ceres-api:8000
+  - service: http_status:404

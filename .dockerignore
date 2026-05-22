@@ -1,0 +1,12 @@
+.venv/
+cloudflared/
+.git/
+.claude/
+__pycache__/
+*.pyc
+*.db
+.env
+.env.example
+contexto_proyecto_ceres.md
+CLAUDE.md
+README.md
