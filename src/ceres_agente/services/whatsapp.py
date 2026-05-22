@@ -12,15 +12,16 @@ from src.ceres_agente.db.database import engine
 from src.ceres_agente.services.scoring import calcular_score
 from src.ceres_agente.services.tiie import obtener_tiie, SPREAD_CERES
 from src.ceres_agente.services.cotizador import calcular_cuota
+from src.ceres_agente.services.notificaciones import enviar_correo_resumen
 from src.ceres_agente import run_agent
 
 PREGUNTAS = {
-    "inicio": "👋 Hola, soy *Ceres*, el asistente de crédito de *Grupo Ceres*.\n\n¿A qué se dedica tu negocio? (ej. agricultura, restaurante, ganadería, comercio)",
-    "giro":       "📍 ¿En qué municipio y estado se encuentra tu negocio?",
-    "ubicacion":  "💰 ¿Cuánto dinero necesitas? (escribe solo el número en pesos)",
-    "monto":      "📅 ¿A cuántos meses quieres pagar? (ej. 12, 24, 36)",
-    "plazo":      "👤 Por último, ¿cuál es tu nombre completo?",
-    "nombre":     "🪪 ¿Cuál es tu RFC? (si no lo tienes a la mano escribe *no tengo*)",
+    "inicio": "👋 Hola, soy *Ceres*, el asistente de credito de *Grupo Ceres*.\n\n¿A que se dedica tu negocio? (ej. agricultura, restaurante, ganaderia, comercio)",
+    "giro":       "📍 ¿En que municipio y estado se encuentra tu negocio?",
+    "ubicacion":  "💰 ¿Cuanto dinero necesitas? (escribe solo el numero en pesos)",
+    "monto":      "📅 ¿A cuantos meses quieres pagar? (ej. 12, 24, 36)",
+    "plazo":      "👤 Por ultimo, ¿cual es tu nombre completo?",
+    "nombre":     "🪪 ¿Cual es tu RFC? (si no lo tienes a la mano escribe *no tengo*)",
 }
 
 
@@ -72,7 +73,6 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
 
         if estado == "giro":
             datos["ubicacion_raw"] = mensaje
-            # Intentar separar municipio y estado
             partes = mensaje.replace(",", " ").split()
             datos["municipio"] = partes[0] if partes else mensaje
             datos["estado"] = partes[-1].lower() if len(partes) > 1 else "otro"
@@ -83,7 +83,7 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
             try:
                 datos["monto"] = float(mensaje.replace(",", "").replace("$", "").replace(" ", ""))
             except ValueError:
-                return "Por favor escribe solo el número, sin letras ni símbolos. ¿Cuánto dinero necesitas?"
+                return "Por favor escribe solo el numero, sin letras ni simbolos. ¿Cuanto dinero necesitas?"
             _guardar_estado(conv, "monto", datos, session)
             return PREGUNTAS["monto"]
 
@@ -91,17 +91,17 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
             try:
                 datos["plazo"] = int(mensaje.replace(" ", "").replace("meses", ""))
             except ValueError:
-                return "Escribe solo el número de meses (ej. 12, 24, 36)."
+                return "Escribe solo el numero de meses (ej. 12, 24, 36)."
             _guardar_estado(conv, "plazo", datos, session)
 
-            # Evaluar elegibilidad FIRA con el agente RAG (en thread para no bloquear async)
+            # Evaluar elegibilidad FIRA con el agente multi-agente (orquestador -> subagente FIRA)
             consulta = (
                 f"Mi negocio es {datos.get('giro')} en {datos.get('ubicacion_raw')}. "
-                f"Quiero un crédito de ${datos.get('monto'):,.0f} pesos a {datos.get('plazo')} meses. "
-                f"¿Soy elegible según las reglas de FIRA?"
+                f"Quiero un credito de ${datos.get('monto'):,.0f} pesos a {datos.get('plazo')} meses. "
+                f"¿Soy elegible segun las reglas de FIRA?"
             )
             loop = asyncio.get_event_loop()
-            dictamen = await loop.run_in_executor(None, partial(run_agent, consulta))
+            dictamen = await loop.run_in_executor(None, partial(run_agent, consulta, telefono))
             datos["dictamen"] = dictamen
 
             elegible = "NO ELEGIBLE" not in dictamen.upper()
@@ -110,8 +110,8 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
             if not elegible:
                 _guardar_estado(conv, "inicio", {}, session)
                 return (
-                    f"📋 *Evaluación FIRA:*\n\n{dictamen}\n\n"
-                    "Si tienes otra actividad o proyecto, escríbeme y lo evaluamos."
+                    f"📋 *Evaluacion FIRA:*\n\n{dictamen}\n\n"
+                    "Si tienes otra actividad o proyecto, escribeme y lo evaluamos."
                 )
 
             tiie = await obtener_tiie()
@@ -124,13 +124,13 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
             _guardar_estado(conv, "plazo", datos, session)
             return (
                 f"✅ *¡Buenas noticias! Tu actividad es elegible para financiamiento FIRA.*\n\n"
-                f"📊 *Tu cotización:*\n"
+                f"📊 *Tu cotizacion:*\n"
                 f"• Monto: ${datos['monto']:,.0f}\n"
                 f"• Plazo: {datos['plazo']} meses\n"
-                f"• TIIE 28 días: {tiie:.4f}%\n"
+                f"• TIIE 28 dias: {tiie:.4f}%\n"
                 f"• Tasa final: {tasa:.2f}% anual\n"
                 f"• *Cuota mensual: ${cuota:,.2f}*\n\n"
-                f"¿Quieres continuar con tu solicitud? Responde *SÍ* o *NO*"
+                f"¿Quieres continuar con tu solicitud? Responde *SI* o *NO*"
             )
 
         if estado == "plazo":
@@ -139,7 +139,7 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
                 return PREGUNTAS["plazo"]
             else:
                 _guardar_estado(conv, "inicio", {}, session)
-                return "Entendido. Si en algún momento quieres retomar tu solicitud, escríbeme. 👋"
+                return "Entendido. Si en algun momento quieres retomar tu solicitud, escribeme. 👋"
 
         if estado == "confirmado":
             datos["nombre"] = mensaje
@@ -182,25 +182,34 @@ async def procesar_mensaje(telefono: str, mensaje: str) -> str:
             session.add(lead)
             session.commit()
 
+            # Enviar correo de resumen a Grupo Ceres
+            datos["score"] = resultado_score["score"]
+            datos["decision"] = resultado_score["decision"]
+            datos["fecha"] = datetime.utcnow().strftime("%d/%m/%Y %H:%M")
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, enviar_correo_resumen, datos.copy())
+
             _guardar_estado(conv, "inicio", {}, session)
 
             docs = (
-                "📄 *Documentos requeridos (persona física):*\n"
+                "📄 *Documentos requeridos (persona fisica):*\n"
                 "• INE vigente (frente y reverso)\n"
                 "• CURP\n"
-                "• RFC / Constancia de situación fiscal\n"
+                "• RFC / Constancia de situacion fiscal\n"
                 "• Comprobante de domicilio (menos de 3 meses)\n"
-                "• Estados de cuenta últimos 3 meses\n"
-                "• Autorización de consulta a Buró de Crédito"
+                "• Estados de cuenta ultimos 3 meses\n"
+                "• Autorizacion de consulta a Buro de Credito"
             )
 
             return (
                 f"🎉 *¡Solicitud registrada exitosamente, {datos['nombre']}!*\n\n"
-                f"Un ejecutivo de Grupo Ceres se pondrá en contacto contigo pronto.\n\n"
+                f"Un ejecutivo de Grupo Ceres se pondra en contacto contigo pronto.\n\n"
                 f"{docs}\n\n"
-                f"Tu número de folio es *#{lead.id}*. Guárdalo para dar seguimiento. ✅"
+                f"Puedes enviarme tus documentos por aqui cuando los tengas listos. "
+                f"Tambien puedes escribirme *'estatus'* en cualquier momento para consultar tu solicitud."
             )
 
-        # Fallback
-        _guardar_estado(conv, "inicio", {}, session)
-        return PREGUNTAS["inicio"]
+        # Fallback: si llega un mensaje fuera del flujo, usar el agente multi-agente
+        loop = asyncio.get_event_loop()
+        respuesta = await loop.run_in_executor(None, partial(run_agent, mensaje, telefono))
+        return respuesta

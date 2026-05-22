@@ -17,6 +17,10 @@ class Settings(BaseSettings):
 
     banxico_token: str = ""
 
+    resend_api_key: str = ""
+    correo_destino: str = "dualyrf@gmail.com"
+    correo_remitente: str = "Ceres <contacto@dashclass.studio>"
+
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "ceres-agente"
