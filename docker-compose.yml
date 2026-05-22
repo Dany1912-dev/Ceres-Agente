@@ -11,11 +11,18 @@ services:
       - DATABASE_URL=sqlite:////data/ceres.db
     restart: unless-stopped
 
+  ceres-crm:
+    build: ./frontend
+    expose:
+      - "80"
+    restart: unless-stopped
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - ceres-api
+      - ceres-crm
     restart: unless-stopped
 
 volumes:
