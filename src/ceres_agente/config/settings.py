@@ -3,9 +3,19 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    openai_api_key: str = ""
-    agent_model: str = "gpt-4o-mini"
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "us-east-2"
+    aws_knowledge_base_id: str = ""
+
+    agent_model: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     agent_temperature: float = 0.0
+
+    sid_twilo: str = ""
+    auth_token_twilo: str = ""
+    numero_twilo: str = ""
+
+    banxico_token: str = ""
 
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
