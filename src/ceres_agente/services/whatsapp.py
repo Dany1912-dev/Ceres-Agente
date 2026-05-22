@@ -57,6 +57,24 @@ def _guardar_estado(conv: Conversacion, estado: str, datos: dict, session: Sessi
     session.commit()
 
 
+async def procesar_y_enviar(telefono: str, mensaje: str) -> None:
+    """Procesa y envía respuesta via REST API (evita timeout de Twilio)."""
+    try:
+        respuesta = await procesar_mensaje(telefono, mensaje)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _enviar_mensaje, telefono, respuesta)
+    except Exception as e:
+        print(f"[Ceres] Error procesando {telefono}: {e}")
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None, _enviar_mensaje, telefono,
+                "Lo siento, ocurrio un problema. Por favor intenta de nuevo."
+            )
+        except Exception:
+            pass
+
+
 async def procesar_mensaje(telefono: str, mensaje: str) -> str:
     with Session(engine) as session:
         conv = _get_o_crear_conversacion(telefono, session)
